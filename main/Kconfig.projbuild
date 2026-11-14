@@ -1,0 +1,30 @@
+menu "Glucose Fake Device"
+
+    config GLUCOSE_INTERVAL_MS
+        int "Reading interval (ms)"
+        range 100 600000
+        default 3000
+        help
+            Time between simulated readings while a central is subscribed.
+            Real CGMs send a reading every few minutes; this is short for fast tests.
+
+    config GLUCOSE_SEED
+        int "Generator seed"
+        range 1 2147483647
+        default 1
+        help
+            Seed for the deterministic random walk. Same seed, same sequence.
+
+    choice GLUCOSE_DELIVERY
+        prompt "Delivery method"
+        default GLUCOSE_DELIVERY_INDICATE
+        help
+            Notifications are unacknowledged; indications are acknowledged by the central.
+
+        config GLUCOSE_DELIVERY_NOTIFY
+            bool "Notify"
+        config GLUCOSE_DELIVERY_INDICATE
+            bool "Indicate"
+    endchoice
+
+endmenu
