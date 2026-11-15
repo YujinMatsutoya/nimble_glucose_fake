@@ -146,16 +146,10 @@ void send_glucose_reading(void) {
     struct glucose_reading r;
     uint32_t param = 0;
     switch (fault_on_send(glucose_last_reading().seq + 1, &param)) {
-    case FAULT_SILENCE:
-        return;
     case FAULT_DROP:
         ble_gap_terminate(glucose_chr_conn_handle,
                           param ? param : BLE_ERR_REM_USER_CONN_TERM);
         return;
-    case FAULT_SKIP:
-        glucose_skip_seq(param);
-        r = glucose_next_reading();
-        break;
     default:
         r = glucose_next_reading();
         break;

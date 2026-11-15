@@ -4,7 +4,7 @@ Scripted faults make the fake sensor misbehave on demand. With no fault armed, b
 
 ## Arming
 
-One fault slot: arming replaces the armed fault. `clear` also ends a silence and resumes advertising after a no-re-advertise drop. Fault state survives a disconnect and is lost on reboot.
+One fault slot: arming replaces the armed fault. `clear` resumes advertising after a no-re-advertise drop. Fault state survives a disconnect and is lost on reboot.
 
 **BLE:** write (with response) 10 bytes, little-endian, to the fault characteristic.
 
@@ -20,13 +20,13 @@ One fault slot: arming replaces the armed fault. `clear` also ends a silence and
 | 2 | trigger | uint8 | 0 now, 1 after N readings, 2 at seq N |
 | 3 | trigger N | uint16 | |
 | 5 | flags | uint8 | bit0 repeat, bit1 no-re-advertise (drop) |
-| 6 | param | uint32 | per fault |
+| 6 | param | uint32 | drop: HCI reason, 0 = 0x13 |
 
-Example, skip 3 at seq 10: `01 02 02 0a 00 00 03 00 00 00`. Wrong length: `Invalid Attribute Value Length`. Invalid fault or parameters: `Value Not Allowed`.
+Example, drop at seq 10: `01 01 02 0a 00 00 00 00 00 00`. Wrong length: `Invalid Attribute Value Length`. Invalid fault or parameters: `Value Not Allowed`.
 
 **Serial** (console on the UART, prompt `fault>`):
 ```
-fault arm <drop|skip|silence|1-3> [now|after=N|seq=N] [repeat] [param=V] [no-readv]
+fault arm <drop|1> [now|after=N|seq=N] [repeat] [param=V] [no-readv]
 fault clear
 fault status
 ```
@@ -43,7 +43,5 @@ Each firing logs `FAULT fired id=<n> name=<name> seq=<n> param=<v>`.
 | ID | Name | param | Behaviour | A correct central should |
 | --- | --- | --- | --- | --- |
 | 1 | drop | HCI reason, 0 = 0x13 | Disconnects in place of a reading (seq not used). Advertising resumes unless no-re-advertise is set. | Report the disconnect, reconnect, resubscribe; numbering continues without a gap. With no-re-advertise, time out finding the device. |
-| 2 | skip | k, 1..65535 | Seq jumps forward by k and stays advanced: k numbers are missing. | Detect a gap of k. |
-| 3 | silence | seconds, 0 = until cleared | Stops sending; link and subscription stay up and seq does not advance. READ still works. | Notice the missing readings by timing and surface a data-stale state. |
 
-Not covered: pairing, ATT errors, duplicate and stale-timestamp faults.
+Other faults (skip, silence, duplicate, stale timestamp, ATT error) are not implemented.
