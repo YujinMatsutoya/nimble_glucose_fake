@@ -25,6 +25,8 @@ struct glucose_reading {
 struct glucose_reading glucose_next_reading(void);
 /* Latest reading produced (seq 0, glucose start value before the first) */
 struct glucose_reading glucose_last_reading(void);
+/* Fault injection: jump the sequence forward by k (stays advanced) */
+void glucose_skip_seq(uint16_t k);
 /* Little-endian packet encoding, buf must hold GLUCOSE_PACKET_LEN bytes */
 void glucose_encode(const struct glucose_reading *r, uint8_t *buf);
 

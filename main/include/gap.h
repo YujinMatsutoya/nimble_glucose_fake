@@ -17,6 +17,8 @@
 
 /* Public function declarations */
 void adv_init(void);
+/* Restart advertising after a no-re-advertise drop fault */
+void adv_resume(void);
 int gap_init(void);
 
 #endif // GAP_SVC_H

@@ -5,6 +5,7 @@
  */
 /* Includes */
 #include "common.h"
+#include "fault.h"
 #include "gap.h"
 #include "gatt_svc.h"
 #include "glucose.h"
@@ -92,6 +93,9 @@ void app_main(void) {
         ESP_LOGE(TAG, "failed to initialize nvs flash, error code: %d ", ret);
         return;
     }
+
+    /* Fault injection lock and serial console */
+    fault_init();
 
     /* NimBLE stack initialization */
     ret = nimble_port_init();

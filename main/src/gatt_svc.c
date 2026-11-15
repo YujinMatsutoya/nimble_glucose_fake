@@ -6,12 +6,15 @@
 /* Includes */
 #include "gatt_svc.h"
 #include "common.h"
+#include "fault.h"
 #include "glucose.h"
 #include <inttypes.h>
 
 /* Private function declarations */
 static int glucose_chr_access(uint16_t conn_handle, uint16_t attr_handle,
                               struct ble_gatt_access_ctxt *ctxt, void *arg);
+static int fault_chr_access(uint16_t conn_handle, uint16_t attr_handle,
+                            struct ble_gatt_access_ctxt *ctxt, void *arg);
 
 /* Private variables */
 /* Glucose service (custom 128-bit UUIDs, see docs/PROTOCOL.md) */
@@ -23,6 +26,14 @@ static uint16_t glucose_chr_val_handle;
 static const ble_uuid128_t glucose_chr_uuid =
     BLE_UUID128_INIT(0x47, 0x47, 0x4d, 0x54, 0x87, 0xc8, 0x2b, 0xa0, 0xd0,
                      0x47, 0x84, 0x21, 0x3d, 0x4a, 0xa4, 0xeb);
+
+/* Fault control service (see docs/FAULT_MATRIX.md) */
+static const ble_uuid128_t fault_svc_uuid =
+    BLE_UUID128_INIT(0x6e, 0x5c, 0x4a, 0x3b, 0x2f, 0x1d, 0xc4, 0xa6, 0x90,
+                     0x4e, 0x2d, 0x7b, 0x1a, 0x3c, 0x8e, 0x5f);
+static const ble_uuid128_t fault_chr_uuid =
+    BLE_UUID128_INIT(0xd9, 0xc8, 0xb7, 0xa6, 0x95, 0x84, 0x73, 0x82, 0x61,
+                     0x40, 0x5f, 0x4e, 0x3d, 0x2c, 0x1b, 0x9a);
 
 #if CONFIG_GLUCOSE_DELIVERY_INDICATE
 #define GLUCOSE_SEND_FLAG BLE_GATT_CHR_F_INDICATE
@@ -47,6 +58,18 @@ static const struct ble_gatt_svc_def gatt_svr_svcs[] = {
               .val_handle = &glucose_chr_val_handle},
              {
                  0, /* No more characteristics in this service. */
+             }}},
+
+    /* Fault control service */
+    {.type = BLE_GATT_SVC_TYPE_PRIMARY,
+     .uuid = &fault_svc_uuid.u,
+     .characteristics =
+         (struct ble_gatt_chr_def[]){
+             {.uuid = &fault_chr_uuid.u,
+              .access_cb = fault_chr_access,
+              .flags = BLE_GATT_CHR_F_WRITE},
+             {
+                 0,
              }}},
 
     {
@@ -92,13 +115,51 @@ error:
     return BLE_ATT_ERR_UNLIKELY;
 }
 
+/* Write-only: a 10-byte little-endian fault command */
+static int fault_chr_access(uint16_t conn_handle, uint16_t attr_handle,
+                            struct ble_gatt_access_ctxt *ctxt, void *arg) {
+    uint8_t b[FAULT_CMD_LEN];
+    if (ctxt->op != BLE_GATT_ACCESS_OP_WRITE_CHR) {
+        return BLE_ATT_ERR_UNLIKELY;
+    }
+    if (OS_MBUF_PKTLEN(ctxt->om) != sizeof(b)) {
+        return BLE_ATT_ERR_INVALID_ATTR_VALUE_LEN;
+    }
+    os_mbuf_copydata(ctxt->om, 0, sizeof(b), b);
+    struct fault_cmd c = {
+        .cmd = b[0],
+        .fault_id = b[1],
+        .trigger = b[2],
+        .trigger_n = b[3] | (b[4] << 8),
+        .flags = b[5],
+        .param = b[6] | (b[7] << 8) | (b[8] << 16) | ((uint32_t)b[9] << 24)};
+    return fault_command(&c) == 0 ? 0 : BLE_ATT_ERR_VALUE_NOT_ALLOWED;
+}
+
 /* Public functions */
 void send_glucose_reading(void) {
     if (!glucose_sub_status) {
         return;
     }
 
-    struct glucose_reading r = glucose_next_reading();
+    /* Scripted faults: decide what this tick does */
+    struct glucose_reading r;
+    uint32_t param = 0;
+    switch (fault_on_send(glucose_last_reading().seq + 1, &param)) {
+    case FAULT_SILENCE:
+        return;
+    case FAULT_DROP:
+        ble_gap_terminate(glucose_chr_conn_handle,
+                          param ? param : BLE_ERR_REM_USER_CONN_TERM);
+        return;
+    case FAULT_SKIP:
+        glucose_skip_seq(param);
+        r = glucose_next_reading();
+        break;
+    default:
+        r = glucose_next_reading();
+        break;
+    }
     uint8_t buf[GLUCOSE_PACKET_LEN];
     glucose_encode(&r, buf);
 
