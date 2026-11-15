@@ -5,7 +5,6 @@
 #include "fault.h"
 #include "common.h"
 #include "esp_console.h"
-#include "esp_timer.h"
 #include "freertos/semphr.h"
 #include "gap.h"
 #include "glucose.h"
@@ -13,10 +12,7 @@
 #include <stdlib.h>
 
 /* Private variables */
-static const char *const names[FAULT_ID_MAX] = {
-    [FAULT_DROP] = "drop",
-    [FAULT_SKIP] = "skip",
-    [FAULT_SILENCE] = "silence"};
+static const char *const names[FAULT_ID_MAX] = {[FAULT_DROP] = "drop"};
 
 static SemaphoreHandle_t lock;
 /* One slot: arming replaces. count = events seen since arming / last firing */
@@ -25,8 +21,6 @@ static struct {
     struct fault_cmd c;
     uint32_t count;
 } slot;
-static int64_t silent_until_us;
-static bool silent_forever;
 static bool adv_suppressed;
 
 /* Private functions (call with lock held) */
@@ -57,8 +51,6 @@ static void log_fired(enum fault_id id, uint16_t seq, uint32_t param) {
 static void clear(void) {
     xSemaphoreTake(lock, portMAX_DELAY);
     slot.armed = false;
-    silent_forever = false;
-    silent_until_us = 0;
     bool resume = adv_suppressed;
     adv_suppressed = false;
     xSemaphoreGive(lock);
@@ -82,8 +74,7 @@ int fault_command(const struct fault_cmd *c) {
     if (c->trigger == FAULT_TRIG_SEQ && (c->flags & FAULT_FLAG_REPEAT)) {
         return -1;
     }
-    if ((c->fault_id == FAULT_SKIP && (c->param < 1 || c->param > 0xffff)) ||
-        (c->fault_id == FAULT_DROP && c->param > 0xff)) {
+    if (c->param > 0xff) { /* HCI reason */
         return -1;
     }
 
@@ -108,20 +99,14 @@ int fault_command(const struct fault_cmd *c) {
 
 enum fault_id fault_on_send(uint16_t next_seq, uint32_t *param) {
     enum fault_id id = FAULT_NONE;
-    bool silent = false;
 
     xSemaphoreTake(lock, portMAX_DELAY);
-    if (silent_forever || esp_timer_get_time() < silent_until_us) {
-        silent = true;
-    } else if (slot.armed) {
+    if (slot.armed) {
         if (due(next_seq)) {
             id = slot.c.fault_id;
             *param = slot.c.param;
-            if (id == FAULT_DROP && (slot.c.flags & FAULT_FLAG_NO_READV)) {
+            if (slot.c.flags & FAULT_FLAG_NO_READV) {
                 adv_suppressed = true;
-            } else if (id == FAULT_SILENCE) {
-                silent_forever = *param == 0;
-                silent_until_us = esp_timer_get_time() + *param * 1000000LL;
             }
             fired();
         } else {
@@ -133,7 +118,7 @@ enum fault_id fault_on_send(uint16_t next_seq, uint32_t *param) {
     if (id != FAULT_NONE) {
         log_fired(id, next_seq, *param);
     }
-    return silent ? FAULT_SILENCE : id;
+    return id;
 }
 
 bool fault_adv_suppressed(void) { return adv_suppressed; }
@@ -159,7 +144,6 @@ static int cmd_fault(int argc, char **argv) {
         bool armed = slot.armed;
         struct fault_cmd c = slot.c;
         uint32_t count = slot.count;
-        bool silent = silent_forever || esp_timer_get_time() < silent_until_us;
         xSemaphoreGive(lock);
         if (armed) {
             printf("armed: %s trigger=%d n=%u flags=0x%02x param=%" PRIu32
@@ -169,7 +153,7 @@ static int cmd_fault(int argc, char **argv) {
         } else {
             printf("no fault armed\n");
         }
-        printf("silent=%d adv_suppressed=%d\n", silent, adv_suppressed);
+        printf("adv_suppressed=%d\n", adv_suppressed);
         return 0;
     }
     if (argc >= 3 && strcmp(argv[1], "arm") == 0) {
@@ -202,7 +186,7 @@ static int cmd_fault(int argc, char **argv) {
         }
         return 0;
     }
-    printf("usage: fault arm <drop|skip|silence|1-3> "
+    printf("usage: fault arm <drop|1> "
            "[now|after=N|seq=N] [repeat] [param=V] [no-readv]\n"
            "       fault clear | fault status\n");
     return 1;

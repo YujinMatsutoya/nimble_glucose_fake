@@ -46,8 +46,6 @@ struct glucose_reading glucose_next_reading(void) {
 
 struct glucose_reading glucose_last_reading(void) { return last; }
 
-void glucose_skip_seq(uint16_t k) { last.seq += k; }
-
 void glucose_encode(const struct glucose_reading *r, uint8_t *buf) {
     buf[0] = r->seq & 0xff;
     buf[1] = r->seq >> 8;

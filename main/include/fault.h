@@ -10,8 +10,6 @@
 enum fault_id {
     FAULT_NONE = 0,
     FAULT_DROP,    /* disconnect; param = HCI reason (0 -> 0x13) */
-    FAULT_SKIP,    /* seq jumps forward by param (1..65535), stays advanced */
-    FAULT_SILENCE, /* stop sending for param seconds (0 = until cleared) */
     FAULT_ID_MAX
 };
 
@@ -37,7 +35,7 @@ void fault_init(void);
 /* Arm or clear (BLE write and serial both end up here); 0 = ok */
 int fault_command(const struct fault_cmd *c);
 /* Called by the sender before each reading. Returns the fault to apply now
- * (FAULT_NONE = send normally, FAULT_SILENCE = send nothing) */
+ * (FAULT_NONE = send normally) */
 enum fault_id fault_on_send(uint16_t next_seq, uint32_t *param);
 /* True after a drop fault with FAULT_FLAG_NO_READV, until cleared */
 bool fault_adv_suppressed(void);
