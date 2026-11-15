@@ -6,6 +6,7 @@
 /* Includes */
 #include "gap.h"
 #include "common.h"
+#include "fault.h"
 #include "gatt_svc.h"
 
 /* Private function declarations */
@@ -196,8 +197,12 @@ static int gap_event_handler(struct ble_gap_event *event, void *arg) {
         /* Reset glucose subscription state */
         gatt_svr_reset_glucose_subscription();
 
-        /* Restart advertising */
-        start_advertising();
+        /* Restart advertising (unless a drop fault asked us not to) */
+        if (fault_adv_suppressed()) {
+            ESP_LOGW(TAG, "advertising not resumed (fault); 'fault clear'");
+        } else {
+            start_advertising();
+        }
         return rc;
 
     /* Connection parameters update event */
@@ -294,6 +299,12 @@ void adv_init(void) {
 
     /* Start advertising. */
     start_advertising();
+}
+
+void adv_resume(void) {
+    if (!ble_gap_adv_active()) {
+        start_advertising();
+    }
 }
 
 int gap_init(void) {
