@@ -3,3 +3,10 @@ sdkconfig
 sdkconfig.old
 managed_components/
 dependencies.lock
+tests/.venv/
+tests/logs/
+tests/report.xml
+__pycache__/
+.pytest_cache/
+logs/
+report.xml

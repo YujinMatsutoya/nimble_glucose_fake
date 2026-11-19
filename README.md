@@ -48,3 +48,7 @@ idf.py -p /dev/ttyACM0 flash monitor
 (To exit the serial monitor, type ``Ctrl-]``.)
 
 See the [Getting Started Guide](https://idf.espressif.com/) for full steps to configure and use ESP-IDF to build projects.
+
+## Tests
+
+Python tests for the data stream and the drop fault are in [tests/](tests/README.md). Fault control is documented in [docs/FAULT_MATRIX.md](docs/FAULT_MATRIX.md).
