@@ -8,3 +8,5 @@ tests/logs/
 tests/report.xml
 __pycache__/
 .pytest_cache/
+logs/
+report.xml
