@@ -1,0 +1,13 @@
+[project]
+name = "glucose-fake-tests"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = ["bleak", "pytest", "pytest-asyncio", "pyserial"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "--junitxml=report.xml"
+log_file = "logs/last.log"
+log_file_level = "INFO"
+log_file_format = "%(asctime)s.%(msecs)03d %(message)s"
