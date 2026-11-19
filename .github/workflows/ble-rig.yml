@@ -1,0 +1,28 @@
+name: BLE rig
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+# Only one run may use the rig at a time
+concurrency:
+  group: ble-rig
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  rig-check:
+    runs-on: [self-hosted, macOS, X64, ble-rig]
+    timeout-minutes: 10
+    steps:
+      - name: Machine architecture
+        run: uname -m
+
+      - name: Python version
+        run: python3 --version
+
+      - name: Serial ports (ESP32 should appear here)
+        run: ls /dev/cu.*
