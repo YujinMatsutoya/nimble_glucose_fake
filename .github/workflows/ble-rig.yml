@@ -16,13 +16,41 @@ permissions:
 jobs:
   rig-check:
     runs-on: [self-hosted, macOS, X64, ble-rig]
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
-      - name: Machine architecture
-        run: uname -m
+      - uses: actions/checkout@v4
 
-      - name: Python version
-        run: python3 --version
+      - name: Find the ESP32 serial port
+        run: |
+          ports=$(ls /dev/cu.usbserial-* 2>/dev/null || true)
+          if [ -z "$ports" ]; then
+            echo "::error::No ESP32 found: no /dev/cu.usbserial-* port on this runner"
+            ls /dev/cu.* || true
+            exit 1
+          fi
+          port=$(echo "$ports" | head -n 1)
+          echo "ESP32 port: $port"
+          echo "SERIAL_PORT=$port" >> "$GITHUB_ENV"
 
-      - name: Serial ports (ESP32 should appear here)
-        run: ls /dev/cu.*
+      - name: Create venv and install requirements
+        working-directory: tests
+        run: |
+          python3 --version
+          python3 -m venv .venv
+          .venv/bin/python -m pip install --quiet --upgrade pip
+          .venv/bin/python -m pip install --quiet bleak pytest pytest-asyncio pyserial
+
+      - name: Run pytest
+        working-directory: tests
+        run: .venv/bin/python -m pytest test_drop.py --serial-port="$SERIAL_PORT"
+
+      # Runs even when the tests fail, so the logs are always available
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ble-rig-logs
+          path: |
+            tests/logs/
+            tests/report.xml
+          if-no-files-found: warn
