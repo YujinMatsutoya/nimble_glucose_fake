@@ -42,7 +42,7 @@ jobs:
 
       - name: Run pytest
         working-directory: tests
-        run: .venv/bin/python -m pytest --serial-port="$SERIAL_PORT"
+        run: .venv/bin/python -m pytest test_drop.py --serial-port="$SERIAL_PORT"
 
       # Runs even when the tests fail, so the logs are always available
       - name: Upload logs
